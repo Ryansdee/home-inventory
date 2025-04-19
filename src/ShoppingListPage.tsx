@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getDocs, collection, query, where, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import './ShoppingListPage.css';
 

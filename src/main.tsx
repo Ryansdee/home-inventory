@@ -1,7 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom'
-import App from './App'
 import InventoryPage from './App'
 import ShoppingListPage from './ShoppingListPage'
 import './index.css'
