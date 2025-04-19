@@ -103,7 +103,7 @@ export default function App() {
     setSelectedId('');
     setName('');
     setCategory('');
-    setQuantity(1);
+    setQuantity(0);
   };
 
   const handleDelete = async (id: string) => {
