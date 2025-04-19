@@ -85,6 +85,7 @@
   { "id": "79", "name": "- RESERVE SECHE -", "category": "Réserve sèche" },
   { "id": "80", "name": "Granola", "category": "Réserve sèche" },
   { "id": "81", "name": "Purée instantanée", "category": "Réserve sèche" },
+  { "id": "117", "name": "Kellogs", "category":"Réserve sèche"},
 
   { "id": "82", "name": "- HYGIENE -", "category": "Hygiène" },
   { "id": "83", "name": "Papier toilette", "category": "Hygiène" },
