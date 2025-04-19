@@ -1,7 +1,7 @@
 // Import Firebase core + modules dont tu as besoin
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";  // L'importation de `where` doit être ici
+import { getFirestore } from "firebase/firestore";  // L'importation de where doit être ici
 
 // Config Firebase (copiée depuis la console)
 const firebaseConfig = {

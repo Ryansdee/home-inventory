@@ -1,3 +1,34 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* index.css */
+
+/* Style global pour les boutons */
+.btn {
+    background-color: #4CAF50; /* Vert vif */
+    color: white;
+    padding: 16px 32px;
+    font-size: 20px; /* Augmenter la taille de la police */
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    border: 2px solid #4CAF50;
+    border-radius: 8px;
+    margin: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  
+  .btn:hover {
+    background-color: #45a049; /* Changer la couleur lors du survol */
+  }
+  
+  /* Pour rendre l'interface encore plus accessible */
+  header nav {
+    font-size: 24px; /* Taille de texte plus grande pour l'en-tête */
+    font-weight: bold;
+    margin-top: 20px;
+    text-align: center;
+  }
+  

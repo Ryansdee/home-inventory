@@ -22,6 +22,7 @@ export default function App() {
   const [quantity, setQuantity] = useState(1);
   const [selectedId, setSelectedId] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null); // 🆕
 
   useEffect(() => {
     const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
@@ -31,9 +32,38 @@ export default function App() {
         ...(doc.data() as Omit<Item, 'id'>)
       }));
       setItems(data);
+
+      if (data.length > 0) {
+        const latest = data.reduce((a, b) =>
+          a.createdAt.toMillis() > b.createdAt.toMillis() ? a : b
+        );
+        setLastUpdated(latest.createdAt.toDate());
+      }
     });
+
+    // Ajout auto à la liste de courses
+    items.forEach(item => {
+      if (item.quantity <= 1) {
+        addToShoppingList(item);
+      }
+    });
+
     return () => unsubscribe();
-  }, []);
+  }, [items]);
+
+  const addToShoppingList = async (item: Item) => {
+    const shoppingListQuery = query(collection(db, 'shopping-list'), where('name', '==', item.name));
+    const shoppingListSnapshot = await getDocs(shoppingListQuery);
+
+    if (shoppingListSnapshot.empty) {
+      await addDoc(collection(db, 'shopping-list'), {
+        name: item.name,
+        quantity: item.quantity,
+        category: item.category,
+        createdAt: Timestamp.now()
+      });
+    }
+  };
 
   const handleItemSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;
@@ -85,16 +115,15 @@ export default function App() {
     await updateDoc(itemRef, { quantity: newQuantity });
   };
 
-  const filteredItems = items.filter(item => 
+  const filteredItems = items.filter(item =>
     selectedCategory ? item.category === selectedCategory : true
   );
 
   const sortedItems = filteredItems.sort((a, b) => {
-    return Number(a.id) - Number(b.id); // Sort by id as number
+    return Number(a.id) - Number(b.id);
   });
 
   const isBoldName = (name: string) => {
-    // Check if the name is wrapped in "- [name] -"
     const regex = /^-\s*\[.*\]\s*-$/;
     return regex.test(name);
   };
@@ -140,13 +169,19 @@ export default function App() {
         </select>
       </div>
 
+      {/* 🆕 Dernière mise à jour */}
+      {lastUpdated && (
+        <p style={{ marginTop: '1rem', textAlign: 'right', fontStyle: 'italic' }}>
+          Dernière mise à jour : {lastUpdated.toLocaleString()}
+        </p>
+      )}
+
       <table>
         <thead>
           <tr>
             <th>Nom</th>
             <th>Quantité</th>
             <th>Catégorie</th>
-            <th>Date</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -166,7 +201,6 @@ export default function App() {
                 />
               </td>
               <td>{item.category}</td>
-              <td>{item.createdAt.toDate().toLocaleString()}</td>
               <td>
                 <button onClick={() => handleDelete(item.id)} className="delete">
                   🗑️
