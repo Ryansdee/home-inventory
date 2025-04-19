@@ -22,6 +22,7 @@
     { "id": "20", "name": "Iced Tea", "category": "Boissons" },
     { "id": "21", "name": "Canette Coca", "category": "Boissons" },
     { "id": "22", "name": "Canette Coca Zero", "category": "Boissons" },
+    { "id": "53", "name": "Café", "category":"Boissons"}
   
     { "id": "23", "name": "CONSERVES", "category": "Conserver / Bocaux" },
     { "id": "24", "name": "Concentrer de tomates", "category": "Conserver / Bocaux" },
