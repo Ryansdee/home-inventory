@@ -3,7 +3,7 @@ import { getDocs, query, where, collection, Timestamp, onSnapshot, orderBy, addD
 import { db } from './firebase';
 import alimentsData from './aliments.json';
 import './App.css'; // Importer le fichier CSS personnalisé
-
+// comment
 type Item = {
   id: string;
   name: string;
