@@ -113,15 +113,14 @@
 
   { "id": "106", "name": "- VIANDE / POISSON -", "category": "Viande / poisson" },
   { "id": "107", "name": "Boeuf haché", "category": "Viande / poisson" },
-  { "id": "108", "name": "Dinde", "category": "Viande / poisson" },
-  { "id": "109", "name": "Côte de porc", "category": "Viande / poisson" },
-  { "id": "110", "name": "Poisson blanc", "category": "Viande / poisson" },
-  { "id": "111", "name": "Poisson rouge", "category": "Viande / poisson" },
-  { "id": "112", "name": "Poisson frais", "category": "Viande / poisson" },
-  { "id": "113", "name": "Crevettes", "category": "Viande / poisson" },
-  { "id": "114", "name": "Sardines", "category": "Viande / poisson" },
-  { "id": "115", "name": "Steak de cheval", "category": "Viande / poisson" },
-  { "id": "116", "name": "Boeuf", "category": "Viande / poisson" },
-  { "id": "117", "name": "Lardons", "category": "Viande / poisson" },
-  { "id": "118", "name": "Pâté de campagne", "category": "Viande / poisson" }
+  { "id": "108", "name": "Spiering", "category":"Viande / poisson"},
+  { "id" : "109", "name": "Pillons de poulet", "category":"Viande / poisson"},
+  { "id": "110", "name":"Chipolata normale", "category":"Viande / poisson"},
+  { "id": "111", "name":"Chipolata poulet", "category":"Viande / poisson"},
+  { "id": "112", "name":"Côtelette", "category":"Viande / poisson"},
+  { "id": "113", "name":"Rôti de porc", "category":"Viande / poisson"},
+  { "id": "114", "name": "Poulet blanc", "category":"Viande / poisson"},
+  { "id":"115", "name": "Filet de saumon", "category":"Viande / poisson"},
+  { "id":"116", "name": "Cabillaud", "category": "Viande / poisson"}
 ]
+
