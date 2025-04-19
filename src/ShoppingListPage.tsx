@@ -15,17 +15,25 @@ export default function ShoppingListPage() {
 
   useEffect(() => {
     const q = query(collection(db, 'shopping-list'));
-
+  
     const unsubscribe = onSnapshot(q, snapshot => {
       const data: ShoppingItem[] = snapshot.docs.map(doc => ({
         id: doc.id,
         ...(doc.data() as Omit<ShoppingItem, 'id'>),
       }));
-      setShoppingList(data);
+  
+      // Supprimer les doublons basés sur le nom de l'article
+      const uniqueByName = data.filter(
+        (item, index, self) =>
+          index === self.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase())
+      );
+  
+      setShoppingList(uniqueByName);
     });
-
+  
     return () => unsubscribe();
   }, []);
+  
 
   const handleDelete = async (id: string) => {
     await deleteDoc(doc(db, 'shopping-list', id));
