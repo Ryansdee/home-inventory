@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { getDocs, query, where, collection, Timestamp, onSnapshot, orderBy, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import {
+  getDocs, query, where, collection, Timestamp, onSnapshot,
+  orderBy, addDoc, deleteDoc, doc, updateDoc
+} from "firebase/firestore";
 import { db } from './firebase';
 import alimentsData from './aliments.json';
-import './App.css'; // Importer le fichier CSS personnalisé
-// comment
+import './App.css';
+
 type Item = {
   id: string;
   name: string;
@@ -17,7 +20,8 @@ export default function App() {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [selectedId, setSelectedId] = useState(''); // ✅ déplacement ici
+  const [selectedId, setSelectedId] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   useEffect(() => {
     const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
@@ -76,23 +80,42 @@ export default function App() {
     await deleteDoc(doc(db, 'items', id));
   };
 
+  const handleQuantityChange = async (id: string, newQuantity: number) => {
+    const itemRef = doc(db, 'items', id);
+    await updateDoc(itemRef, { quantity: newQuantity });
+  };
+
+  const filteredItems = items.filter(item => 
+    selectedCategory ? item.category === selectedCategory : true
+  );
+
+  const sortedItems = filteredItems.sort((a, b) => {
+    return Number(a.id) - Number(b.id); // Sort by id as number
+  });
+
+  const isBoldName = (name: string) => {
+    // Check if the name is wrapped in "- [name] -"
+    const regex = /^-\s*\[.*\]\s*-$/;
+    return regex.test(name);
+  };
+
   return (
     <main className="max-w-7xl mx-auto p-8 font-sans">
       <h1>🍽️ Inventaire des Aliments</h1>
 
       <form onSubmit={handleAdd}>
         <div className="input-container">
-          <select
-            value={selectedId}
-            onChange={handleItemSelect}
-            required
-          >
-            <option value="" disabled>Sélectionnez un aliment</option>
+          <select value={selectedId} onChange={handleItemSelect} required>
+            <option value="" disabled>Sélectionnez un élément</option>
             {alimentsData
               .filter(item => item.category !== "")
               .map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name} - {item.category}
+                <option
+                  key={item.id}
+                  value={item.id}
+                  style={isBoldName(item.name) ? { fontWeight: 'bold' } : {}}
+                >
+                  {item.name}
                 </option>
               ))}
           </select>
@@ -108,6 +131,15 @@ export default function App() {
         <button type="submit">Ajouter</button>
       </form>
 
+      <div className="category-filter">
+        <select onChange={e => setSelectedCategory(e.target.value)} value={selectedCategory}>
+          <option value="">Toutes les catégories</option>
+          {Array.from(new Set(alimentsData.map(item => item.category))).map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+      </div>
+
       <table>
         <thead>
           <tr>
@@ -119,17 +151,24 @@ export default function App() {
           </tr>
         </thead>
         <tbody>
-          {items.map(item => (
+          {sortedItems.map(item => (
             <tr key={item.id}>
               <td>{item.name}</td>
-              <td>{item.quantity}</td>
+              <td>
+                <input
+                  type="number"
+                  value={item.quantity}
+                  min={0}
+                  onChange={e =>
+                    handleQuantityChange(item.id, Number(e.target.value))
+                  }
+                  style={{ width: '60px' }}
+                />
+              </td>
               <td>{item.category}</td>
               <td>{item.createdAt.toDate().toLocaleString()}</td>
               <td>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="delete"
-                >
+                <button onClick={() => handleDelete(item.id)} className="delete">
                   🗑️
                 </button>
               </td>
