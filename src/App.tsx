@@ -17,14 +17,27 @@ type Item = {
 
 export default function App() {
   const [items, setItems] = useState<Item[]>([]);
+  const [shoppingList, setShoppingList] = useState<Item[]>([]);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [selectedId, setSelectedId] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null); // 🆕
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
 
+  // ⏳ "Connexion" de 1 minute puis on passe hors-ligne
   useEffect(() => {
+    if (!navigator.onLine) {
+      const cached = localStorage.getItem('cachedItems');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setItems(parsed);
+        console.log("🔌 Mode hors-ligne activé (données chargées localement)");
+      }
+      return;
+    }
+
     const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, snapshot => {
       const data: Item[] = snapshot.docs.map(doc => ({
@@ -32,6 +45,15 @@ export default function App() {
         ...(doc.data() as Omit<Item, 'id'>)
       }));
       setItems(data);
+      localStorage.setItem('cachedItems', JSON.stringify(data));
+
+      data.forEach(item => {
+        if (item.quantity === 0) {
+          addToShoppingList(item);
+        } else {
+          removeFromShoppingList(item.name);
+        }
+      });
 
       if (data.length > 0) {
         const latest = data.reduce((a, b) =>
@@ -41,20 +63,55 @@ export default function App() {
       }
     });
 
-    // Ajout auto à la liste de courses
-    items.forEach(item => {
-      if (item.quantity <= 1) {
-        addToShoppingList(item);
-      }
-    });
+    const timeout = setTimeout(() => {
+      setIsOnline(false);
+      unsubscribe();
+      console.log("🕐 Connexion désactivée après 1 minute");
+    }, 60000);
 
-    return () => unsubscribe();
-  }, [items]);
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
+  }, []);
+
+  // 🔄 Reconnexion → comparer données locales et Firestore
+  useEffect(() => {
+    const handleReconnect = async () => {
+      if (navigator.onLine) {
+        console.log('🌐 Reconnexion détectée...');
+        const snapshot = await getDocs(query(collection(db, 'items')));
+        const serverData: Item[] = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Item, 'id'>),
+        }));
+
+        const localData: Item[] = JSON.parse(localStorage.getItem('cachedItems') || '[]');
+        await syncDifferences(localData, serverData);
+        setItems(serverData);
+        localStorage.setItem('cachedItems', JSON.stringify(serverData));
+        setIsOnline(true);
+      }
+    };
+
+    window.addEventListener('online', handleReconnect);
+    return () => window.removeEventListener('online', handleReconnect);
+  }, []);
+
+  const syncDifferences = async (localItems: Item[], serverItems: Item[]) => {
+    for (const localItem of localItems) {
+      const serverItem = serverItems.find(s => s.id === localItem.id);
+      if (serverItem && localItem.quantity !== serverItem.quantity) {
+        const ref = doc(db, 'items', localItem.id);
+        console.log(`🔄 MAJ ${localItem.name}: ${serverItem.quantity} → ${localItem.quantity}`);
+        await updateDoc(ref, { quantity: localItem.quantity });
+      }
+    }
+  };
 
   const addToShoppingList = async (item: Item) => {
     const shoppingListQuery = query(collection(db, 'shopping-list'), where('name', '==', item.name));
     const shoppingListSnapshot = await getDocs(shoppingListQuery);
-
     if (shoppingListSnapshot.empty) {
       await addDoc(collection(db, 'shopping-list'), {
         name: item.name,
@@ -63,6 +120,14 @@ export default function App() {
         createdAt: Timestamp.now()
       });
     }
+  };
+
+  const removeFromShoppingList = async (name: string) => {
+    const q = query(collection(db, 'shopping-list'), where('name', '==', name));
+    const snapshot = await getDocs(q);
+    snapshot.forEach(async (doc) => {
+      await deleteDoc(doc.ref);
+    });
   };
 
   const handleItemSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -79,10 +144,7 @@ export default function App() {
     e.preventDefault();
     if (!name || !category) return;
 
-    const existingItemQuery = query(
-      collection(db, 'items'),
-      where('name', '==', name)
-    );
+    const existingItemQuery = query(collection(db, 'items'), where('name', '==', name));
     const existingItemSnapshot = await getDocs(existingItemQuery);
 
     if (existingItemSnapshot.empty) {
@@ -103,7 +165,7 @@ export default function App() {
     setSelectedId('');
     setName('');
     setCategory('');
-    setQuantity(0);
+    setQuantity(1);
   };
 
   const handleDelete = async (id: string) => {
@@ -111,39 +173,41 @@ export default function App() {
   };
 
   const handleQuantityChange = async (id: string, newQuantity: number) => {
-    const itemRef = doc(db, 'items', id);
-    await updateDoc(itemRef, { quantity: newQuantity });
+    if (newQuantity < 0) return;
+    const updatedItems = items.map(item =>
+      item.id === id ? { ...item, quantity: newQuantity } : item
+    );
+    setItems(updatedItems);
+    localStorage.setItem('cachedItems', JSON.stringify(updatedItems));
+
+    if (isOnline) {
+      const itemRef = doc(db, 'items', id);
+      await updateDoc(itemRef, { quantity: newQuantity });
+    }
+  };
+
+  const handleRemoveFromShoppingList = async (id: string) => {
+    await deleteDoc(doc(db, 'shopping-list', id));
   };
 
   const filteredItems = items.filter(item =>
     selectedCategory ? item.category === selectedCategory : true
   );
 
-  const sortedItems = filteredItems.sort((a, b) => {
-    return Number(a.id) - Number(b.id);
-  });
-
-  const isBoldName = (name: string) => {
-    const regex = /^-\s*\[.*\]\s*-$/;
-    return regex.test(name);
-  };
+  const sortedItems = filteredItems.sort((a, b) => Number(a.id) - Number(b.id));
 
   return (
     <main className="max-w-7xl mx-auto p-8 font-sans">
-      <h1>🍽️ Inventaire des Aliments</h1>
+      <h1>🍽️ Inventaire des Aliments ({isOnline ? "en ligne" : "hors-ligne"})</h1>
 
       <form onSubmit={handleAdd}>
         <div className="input-container">
           <select value={selectedId} onChange={handleItemSelect} required>
-            <option value="" disabled>Sélectionnez un élément</option>
+            <option value="" disabled>Sélectionnez un aliment</option>
             {alimentsData
               .filter(item => item.category !== "")
               .map(item => (
-                <option
-                  key={item.id}
-                  value={item.id}
-                  style={isBoldName(item.name) ? { fontWeight: 'bold' } : {}}
-                >
+                <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
               ))}
@@ -169,14 +233,13 @@ export default function App() {
         </select>
       </div>
 
-      {/* 🆕 Dernière mise à jour */}
       {lastUpdated && (
         <p style={{ marginTop: '1rem', textAlign: 'right', fontStyle: 'italic' }}>
           Dernière mise à jour : {lastUpdated.toLocaleString()}
         </p>
       )}
 
-      <table>
+      <table style={{ marginBottom: "30px" }}>
         <thead>
           <tr>
             <th>Nom</th>
@@ -187,24 +250,16 @@ export default function App() {
         </thead>
         <tbody>
           {sortedItems.map(item => (
-            <tr key={item.id}>
-              <td>{item.name}</td>
+            <tr key={item.id} className={item.quantity === 0 ? 'highlight-zero' : ''}>
+              <td>{item.name} {item.quantity === 0 && <span title="Dans la liste de courses">🛒</span>}</td>
               <td>
-                <input
-                  type="number"
-                  value={item.quantity}
-                  min={0}
-                  onChange={e =>
-                    handleQuantityChange(item.id, Number(e.target.value))
-                  }
-                  style={{ width: '60px' }}
-                />
+                <button onClick={() => handleQuantityChange(item.id, item.quantity - 1)} className="quantity-btn-moins">-</button>
+                <span style={{ margin: '0 8px' }}>{item.quantity}</span>
+                <button onClick={() => handleQuantityChange(item.id, item.quantity + 1)} className="quantity-btn-plus">+</button>
               </td>
               <td>{item.category}</td>
               <td>
-                <button onClick={() => handleDelete(item.id)} className="delete">
-                  🗑️
-                </button>
+                <button onClick={() => handleDelete(item.id)} className="delete">🗑️</button>
               </td>
             </tr>
           ))}
