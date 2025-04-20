@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, deleteDoc, doc, getDocs, onSnapshot, query, Timestamp, addDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, Timestamp, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import './ShoppingListPage.css';
 
@@ -76,25 +76,12 @@ export default function ShoppingListPage() {
       if (serverItem && localItem.quantity !== serverItem.quantity) {
         const ref = doc(db, 'shopping-list', localItem.id);
         console.log(`🔄 MAJ ${localItem.name}: ${serverItem.quantity} → ${localItem.quantity}`);
-        await addDoc(ref, { quantity: localItem.quantity, createdAt: Timestamp.now() });
+        await updateDoc(ref, { quantity: localItem.quantity, createdAt: Timestamp.now() });
       }
     }
   };
 
   // Ajouter un article à la shopping-list
-  const addToShoppingList = async (item: ShoppingItem) => {
-    const shoppingListQuery = query(collection(db, 'shopping-list'), where('name', '==', item.name));
-    const shoppingListSnapshot = await getDocs(shoppingListQuery);
-
-    if (shoppingListSnapshot.empty) {
-      await addDoc(collection(db, 'shopping-list'), {
-        name: item.name,
-        quantity: item.quantity,
-        category: item.category,
-        createdAt: Timestamp.now()
-      });
-    }
-  };
 
   // Supprimer un article de la shopping-list
   const handleDelete = async (nameToDelete: string) => {

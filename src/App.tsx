@@ -17,7 +17,6 @@ type Item = {
 
 export default function App() {
   const [items, setItems] = useState<Item[]>([]);
-  const [shoppingList, setShoppingList] = useState<Item[]>([]);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -186,9 +185,6 @@ export default function App() {
     }
   };
 
-  const handleRemoveFromShoppingList = async (id: string) => {
-    await deleteDoc(doc(db, 'shopping-list', id));
-  };
 
   const filteredItems = items.filter(item =>
     selectedCategory ? item.category === selectedCategory : true
