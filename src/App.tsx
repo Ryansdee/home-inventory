@@ -194,7 +194,7 @@ export default function App() {
 
   return (
     <main className="max-w-7xl mx-auto p-8 font-sans">
-      <h1>🍽️ Inventaire des Aliments ({isOnline ? "en ligne" : "hors-ligne"})</h1>
+      <h1>🍽️ Inventaire des Aliments</h1>
 
       <form onSubmit={handleAdd}>
         <div className="input-container">
