@@ -5,7 +5,6 @@ import { NavBar, Button } from 'antd-mobile';
 import { useNavigate } from 'react-router-dom';
 import InventoryPage from './App';
 import ShoppingListPage from './ShoppingListPage';
-import BarcodeScanPage from './ScannerPage'; // Import de la page de scan de code-barres
 import './index.css';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
@@ -39,23 +38,12 @@ const AppWithRouting = () => {
         >
           Liste de Courses
         </Button>
-
-        <Button
-          block
-          color="primary"
-          size="large"
-          style={{ marginBottom: '8px' }}
-          onClick={() => navigate('/barcode-scan')}  // Nouveau bouton pour accéder au scanner
-        >
-          Scanner un Code-Barres
-        </Button>
       </div>
 
       {/* Définition des routes */}
       <Routes>
         <Route path="/" element={<InventoryPage />} />
         <Route path="/shopping-list" element={<ShoppingListPage />} />
-        <Route path="/barcode-scan" element={<BarcodeScanPage />} /> {/* Nouvelle route */}
       </Routes>
     </div>
   );
