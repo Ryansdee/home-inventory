@@ -8,6 +8,7 @@ import ShoppingListPage from './ShoppingListPage';
 import './index.css';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
+
 // Le composant App avec le routage
 const AppWithRouting = () => {
   const navigate = useNavigate();  // Initialisation du hook de navigation
