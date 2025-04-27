@@ -22,9 +22,11 @@ type Item = {
 
 export default function App() {
   const [items, setItems] = useState<Item[]>([]);
+  const [, setShoppingList] = useState<Item[]>([]); // Liste des courses
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [popupVisible, setPopupVisible] = useState(false);
+  const [searchPopupVisible, setSearchPopupVisible] = useState(false); // Popup de recherche
 
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState('');
@@ -37,7 +39,10 @@ export default function App() {
         id: doc.id,
         ...(doc.data() as Omit<Item, 'id'>)
       }));
-      setItems(data);
+      const availableItems = data.filter(item => item.quantity >= 0);
+      const shoppingListItems = data.filter(item => item.quantity === 0);
+      setItems(availableItems);  // Ces éléments sont pour l'inventaire
+      setShoppingList(shoppingListItems);  // Ceux avec quantité = 0 vont dans la liste de courses
     });
     return () => unsubscribe();
   }, []);
@@ -100,9 +105,14 @@ export default function App() {
     const item = items.find(i => i.id === id);
     if (!item) return;
     const newQuantity = item.quantity + delta;
-    if (newQuantity < 0) return;
-
-    await updateDoc(doc(db, 'items', id), { quantity: newQuantity });
+    if (newQuantity <= 0) {
+      // Ajouter à la liste des courses si la quantité est 0
+      await updateDoc(doc(db, 'items', id), { quantity: 0 });
+      const itemData = { id, name: item.name, quantity: 0, category: item.category };
+      await addDoc(collection(db, 'shopping-list'), itemData);
+    } else {
+      await updateDoc(doc(db, 'items', id), { quantity: newQuantity });
+    }
   };
 
   const filteredItems = items.filter(item =>
@@ -119,16 +129,26 @@ export default function App() {
           <Button block color="primary" fill="solid" size="large" onClick={() => setPopupVisible(true)}>
             <AddCircleOutline /> Ajouter
           </Button>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <SearchOutline style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            <Input
-              style={{ fontSize: '18px', color: "black", paddingLeft: '36px' }}
-              value={searchQuery}
-              onChange={val => setSearchQuery(val)}
-              placeholder="🔍 Rechercher"
-              clearable
-            />
-          </div>
+          <Button block color="primary" fill="solid" size="large" onClick={() => setSearchPopupVisible(true)}>
+            <SearchOutline /> Recherche
+          </Button>
+        </div>
+
+        <div style={{ position: 'relative', marginBottom: '16px' }}>
+          <SearchOutline style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+          <Input
+            style={{
+              fontSize: '18px',
+              color: 'black',
+              paddingLeft: '36px',
+              borderRadius: '25px',
+              height: '40px',
+            }}
+            value={searchQuery}
+            onChange={val => setSearchQuery(val)}
+            placeholder="🔍 Rechercher"
+            clearable
+          />
         </div>
 
         <Selector
@@ -146,28 +166,26 @@ export default function App() {
             id: doc.id,
             ...(doc.data() as Omit<Item, 'id'>)
           }));
-          setItems(data);
+          setItems(data.filter(item => item.quantity > 0)); // Aliments en inventaire
+          setShoppingList(data.filter(item => item.quantity === 0)); // Liste des courses
         }}>
-          <List header={<div style={{ fontSize: '20px', fontWeight: 'bold', color: "black" }}>📋 Aliments</div>}>
+          <List header={<div style={{ fontSize: '20px', fontWeight: 'bold', color: "black" }}>📋 Aliments en Inventaire</div>}>
             {filteredItems.map(item => (
               <SwipeAction
                 key={item.id}
-                rightActions={[
-                  {
-                    key: 'delete',
-                    text: 'Supprimer',
-                    color: 'danger',
-                    onClick: () => handleDelete(item.id),
-                  }
-                ]}
-              >
+                rightActions={[{
+                  key: 'delete',
+                  text: 'Supprimer',
+                  color: 'danger',
+                  onClick: () => handleDelete(item.id),
+                }]}>
                 <List.Item
                   description={<div style={{ fontSize: '16px', color: '#000' }}>{item.category}</div>}
                   extra={
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Button style={{color: 'red', fontSize: "25px"}}  size="large" onClick={() => handleQuantityChange(item.id, -1)}>-</Button>
-                      <div style={{ fontSize: '20px', color:'#000' }}>{item.quantity}</div>
-                      <Button style={{color: 'green', fontSize: "25px"}}  size="large" onClick={() => handleQuantityChange(item.id, 1)}>+</Button>
+                      <Button style={{ color: 'red', fontSize: "25px" }} size="large" onClick={() => handleQuantityChange(item.id, -1)}>-</Button>
+                      <div style={{ fontSize: '20px', color: '#000' }}>{item.quantity}</div>
+                      <Button style={{ color: 'green', fontSize: "25px" }} size="large" onClick={() => handleQuantityChange(item.id, 1)}>+</Button>
                     </div>
                   }
                   style={{ fontSize: '18px', padding: '20px 16px' }}
@@ -180,6 +198,30 @@ export default function App() {
         </PullToRefresh>
       </div>
 
+      {/* Popup de Recherche */}
+      <Popup
+        visible={searchPopupVisible}
+        onMaskClick={() => setSearchPopupVisible(false)}
+        bodyStyle={{ padding: '20px', borderRadius: '10px' }}
+      >
+        <Input
+          style={{
+            fontSize: '18px',
+            paddingLeft: '10px',
+            marginBottom: '16px',
+            borderRadius: '10px',
+            height: '40px',
+          }}
+          value={searchQuery}
+          onChange={val => setSearchQuery(val)}
+          placeholder="🔍 Rechercher"
+        />
+        <Button block color="primary" fill="solid" onClick={() => setSearchPopupVisible(false)}>
+          Fermer
+        </Button>
+      </Popup>
+
+      {/* Popup pour l'ajout d'élément */}
       <Popup
         visible={popupVisible}
         onMaskClick={() => {
@@ -217,36 +259,24 @@ export default function App() {
               onChange={(v) => setSelectedItemId(v[0])}
               style={{ marginTop: 16 }}
             />
-            <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
-              <Button block size="large" onClick={() => setStep(1)}>
-                Retour
-              </Button>
-              <Button block color="primary" size="large" disabled={!selectedItemId} onClick={() => setStep(3)}>
-                Continuer
-              </Button>
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+              <Button block color="default" onClick={() => setStep(1)}>Précédent</Button>
+              <Button block color="primary" onClick={() => setStep(3)}>Suivant</Button>
             </div>
           </>
         )}
 
         {step === 3 && (
           <>
-            <div style={{ fontSize: '20px', marginBottom: '16px' }}>Choisir la quantité</div>
-            <div style={{ marginTop: 16 }}>
-              <Stepper
-                min={1}
-                max={99}
-                value={selectedQuantity}
-                onChange={val => setSelectedQuantity(val)}
-                style={{ '--input-font-size': '20px' }}
-              />
-            </div>
-            <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
-              <Button block size="large" onClick={() => setStep(2)}>
-                Retour
-              </Button>
-              <Button block color="primary" size="large" onClick={handleAddItem}>
-                Ajouter
-              </Button>
+            <div style={{ fontSize: '20px', marginBottom: '16px' }}>Quantité</div>
+            <Stepper
+              value={selectedQuantity}
+              onChange={setSelectedQuantity}
+              style={{ marginBottom: '16px' }}
+            />
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+              <Button block color="default" onClick={() => setStep(2)}>Précédent</Button>
+              <Button block color="primary" onClick={handleAddItem}>Ajouter</Button>
             </div>
           </>
         )}
