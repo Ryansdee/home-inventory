@@ -120,14 +120,16 @@ export default function App() {
           <Button block color="primary" fill="solid" size="large" onClick={() => setPopupVisible(true)}>
             <AddCircleOutline /> Ajouter
           </Button>
-          <Input
-            style={{ fontSize: '18px', color: "black" }}
-            value={searchQuery}
-            onChange={val => setSearchQuery(val)}
-            placeholder="🔍 Rechercher"
-            clearable
-            prefix={<SearchOutline />}
-          />
+          <div style={{ position: 'relative', flex: 1 }}>
+            <SearchOutline style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <Input
+              style={{ fontSize: '18px', color: "black", paddingLeft: '36px' }}
+              value={searchQuery}
+              onChange={val => setSearchQuery(val)}
+              placeholder="🔍 Rechercher"
+              clearable
+            />
+          </div>
         </div>
 
         <Selector
@@ -140,15 +142,13 @@ export default function App() {
 
       <div style={{ flex: 1, overflow: 'auto', background: '#f7f7f7' }}>
         <PullToRefresh onRefresh={async () => {
-          setRefreshing(true);
           const snapshot = await getDocs(query(collection(db, 'items')));
           const data: Item[] = snapshot.docs.map(doc => ({
             id: doc.id,
             ...(doc.data() as Omit<Item, 'id'>)
           }));
           setItems(data);
-          setRefreshing(false);
-        }} refreshing={refreshing}>
+        }}>
           <List header={<div style={{ fontSize: '20px', fontWeight: 'bold', color: "black" }}>📋 Aliments</div>}>
             {filteredItems.map(item => (
               <SwipeAction
