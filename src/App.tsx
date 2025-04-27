@@ -23,7 +23,6 @@ type Item = {
 export default function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [popupVisible, setPopupVisible] = useState(false);
 
