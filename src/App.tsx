@@ -5,6 +5,11 @@ import {
 } from "firebase/firestore";
 import { db } from './firebase';
 import alimentsData from './aliments.json';
+import {
+  Button, Input, Selector, List, SwipeAction, Toast, PullToRefresh,
+  Popup, Stepper
+} from 'antd-mobile';
+import { AddCircleOutline, SearchOutline } from 'antd-mobile-icons';
 import './App.css';
 
 type Item = {
@@ -17,26 +22,16 @@ type Item = {
 
 export default function App() {
   const [items, setItems] = useState<Item[]>([]);
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [selectedId, setSelectedId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [isOnline, setIsOnline] = useState(true);
+  const [popupVisible, setPopupVisible] = useState(false);
 
-  // ⏳ "Connexion" de 1 minute puis on passe hors-ligne
+  const [step, setStep] = useState(1);
+  const [selectedItemId, setSelectedItemId] = useState('');
+  const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
+
   useEffect(() => {
-    if (!navigator.onLine) {
-      const cached = localStorage.getItem('cachedItems');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        setItems(parsed);
-        console.log("🔌 Mode hors-ligne activé (données chargées localement)");
-      }
-      return;
-    }
-
     const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, snapshot => {
       const data: Item[] = snapshot.docs.map(doc => ({
@@ -44,223 +39,219 @@ export default function App() {
         ...(doc.data() as Omit<Item, 'id'>)
       }));
       setItems(data);
-      localStorage.setItem('cachedItems', JSON.stringify(data));
-
-      data.forEach(item => {
-        if (item.quantity === 0) {
-          addToShoppingList(item);
-        } else {
-          removeFromShoppingList(item.name);
-        }
-      });
-
-      if (data.length > 0) {
-        const latest = data.reduce((a, b) =>
-          a.createdAt.toMillis() > b.createdAt.toMillis() ? a : b
-        );
-        setLastUpdated(latest.createdAt.toDate());
-      }
     });
-
-    const timeout = setTimeout(() => {
-      setIsOnline(false);
-      unsubscribe();
-      console.log("🕐 Connexion désactivée après 1 minute");
-    }, 60000);
-
-    return () => {
-      clearTimeout(timeout);
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
-  // 🔄 Reconnexion → comparer données locales et Firestore
-  useEffect(() => {
-    const handleReconnect = async () => {
-      if (navigator.onLine) {
-        console.log('🌐 Reconnexion détectée...');
-        const snapshot = await getDocs(query(collection(db, 'items')));
-        const serverData: Item[] = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as Omit<Item, 'id'>),
-        }));
+  const categoryOptions = Array.from(new Set(alimentsData.map(item => item.category)))
+    .filter(Boolean)
+    .map(cat => ({ label: cat, value: cat }));
 
-        const localData: Item[] = JSON.parse(localStorage.getItem('cachedItems') || '[]');
-        await syncDifferences(localData, serverData);
-        setItems(serverData);
-        localStorage.setItem('cachedItems', JSON.stringify(serverData));
-        setIsOnline(true);
-      }
-    };
+  const filteredAlimentsOptions = alimentsData
+    .filter(item => item.category === selectedCategory)
+    .map(item => ({
+      label: item.name,
+      value: item.id
+    }));
 
-    window.addEventListener('online', handleReconnect);
-    return () => window.removeEventListener('online', handleReconnect);
-  }, []);
-
-  const syncDifferences = async (localItems: Item[], serverItems: Item[]) => {
-    for (const localItem of localItems) {
-      const serverItem = serverItems.find(s => s.id === localItem.id);
-      if (serverItem && localItem.quantity !== serverItem.quantity) {
-        const ref = doc(db, 'items', localItem.id);
-        console.log(`🔄 MAJ ${localItem.name}: ${serverItem.quantity} → ${localItem.quantity}`);
-        await updateDoc(ref, { quantity: localItem.quantity });
-      }
+  const handleAddItem = async () => {
+    const selectedItem = alimentsData.find(a => a.id === selectedItemId);
+    if (!selectedItem) {
+      Toast.show({ icon: 'fail', content: 'Veuillez choisir un aliment' });
+      return;
     }
-  };
 
-  const addToShoppingList = async (item: Item) => {
-    const shoppingListQuery = query(collection(db, 'shopping-list'), where('name', '==', item.name));
-    const shoppingListSnapshot = await getDocs(shoppingListQuery);
-    if (shoppingListSnapshot.empty) {
-      await addDoc(collection(db, 'shopping-list'), {
-        name: item.name,
-        quantity: item.quantity,
-        category: item.category,
-        createdAt: Timestamp.now()
-      });
-    }
-  };
+    const existingQuery = query(collection(db, 'items'), where('name', '==', selectedItem.name));
+    const snapshot = await getDocs(existingQuery);
 
-  const removeFromShoppingList = async (name: string) => {
-    const q = query(collection(db, 'shopping-list'), where('name', '==', name));
-    const snapshot = await getDocs(q);
-    snapshot.forEach(async (doc) => {
-      await deleteDoc(doc.ref);
-    });
-  };
-
-  const handleItemSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
-    setSelectedId(id);
-    const selectedItem = alimentsData.find(item => item.id === id);
-    if (selectedItem) {
-      setName(selectedItem.name);
-      setCategory(selectedItem.category);
-    }
-  };
-
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !category) return;
-
-    const existingItemQuery = query(collection(db, 'items'), where('name', '==', name));
-    const existingItemSnapshot = await getDocs(existingItemQuery);
-
-    if (existingItemSnapshot.empty) {
+    if (snapshot.empty) {
       await addDoc(collection(db, 'items'), {
-        name,
-        quantity,
-        category,
-        createdAt: Timestamp.now()
+        name: selectedItem.name,
+        category: selectedItem.category,
+        quantity: selectedQuantity,
+        createdAt: Timestamp.now(),
       });
+      Toast.show({ icon: 'success', content: 'Ajouté ✅' });
     } else {
-      existingItemSnapshot.forEach(async (doc) => {
-        await updateDoc(doc.ref, {
-          quantity: doc.data().quantity + quantity
-        });
+      snapshot.forEach(async (docu) => {
+        await updateDoc(docu.ref, { quantity: docu.data().quantity + selectedQuantity });
       });
+      Toast.show({ icon: 'success', content: 'Quantité mise à jour ✅' });
     }
 
-    setSelectedId('');
-    setName('');
-    setCategory('');
-    setQuantity(1);
+    setTimeout(() => {
+      setPopupVisible(false);
+      resetForm();
+    }, 1000);
+  };
+
+  const resetForm = () => {
+    setSelectedCategory('');
+    setSelectedItemId('');
+    setSelectedQuantity(1);
+    setStep(1);
   };
 
   const handleDelete = async (id: string) => {
     await deleteDoc(doc(db, 'items', id));
+    Toast.show({ icon: 'success', content: 'Supprimé' });
   };
 
-  const handleQuantityChange = async (id: string, newQuantity: number) => {
+  const handleQuantityChange = async (id: string, delta: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const newQuantity = item.quantity + delta;
     if (newQuantity < 0) return;
-    const updatedItems = items.map(item =>
-      item.id === id ? { ...item, quantity: newQuantity } : item
-    );
-    setItems(updatedItems);
-    localStorage.setItem('cachedItems', JSON.stringify(updatedItems));
 
-    if (isOnline) {
-      const itemRef = doc(db, 'items', id);
-      await updateDoc(itemRef, { quantity: newQuantity });
-    }
+    await updateDoc(doc(db, 'items', id), { quantity: newQuantity });
   };
-
 
   const filteredItems = items.filter(item =>
-    selectedCategory ? item.category === selectedCategory : true
+    (!selectedCategory || item.category === selectedCategory) &&
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const sortedItems = filteredItems.sort((a, b) => Number(a.id) - Number(b.id));
-
   return (
-    <main className="max-w-7xl mx-auto p-8 font-sans">
-      <h1>🍽️ Inventaire des Aliments</h1>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontSize: '18px' }}>
+      <div style={{ padding: '16px', background: '#fff' }}>
+        <h1 style={{ textAlign: 'center', marginBottom: '16px', fontSize: '24px' }}>🍴 Mon Inventaire</h1>
 
-      <form onSubmit={handleAdd}>
-        <div className="input-container">
-          <select value={selectedId} onChange={handleItemSelect} required>
-            <option value="" disabled>Sélectionnez un aliment</option>
-            {alimentsData
-              .filter(item => item.category !== "")
-              .map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
-        </div>
-        <div className="input-container">
-          <input
-            type="number"
-            min={1}
-            value={quantity}
-            onChange={e => setQuantity(Number(e.target.value))}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <Button block color="primary" fill="solid" size="large" onClick={() => setPopupVisible(true)}>
+            <AddCircleOutline /> Ajouter
+          </Button>
+          <Input
+            style={{ fontSize: '18px', color: "black" }}
+            value={searchQuery}
+            onChange={val => setSearchQuery(val)}
+            placeholder="🔍 Rechercher"
+            clearable
+            prefix={<SearchOutline />}
           />
         </div>
-        <button type="submit">Ajouter</button>
-      </form>
 
-      <div className="category-filter">
-        <select onChange={e => setSelectedCategory(e.target.value)} value={selectedCategory}>
-          <option value="">Toutes les catégories</option>
-          {Array.from(new Set(alimentsData.map(item => item.category))).map((cat) => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
+        <Selector
+          options={[{ label: "Toutes catégories", value: "" }, ...categoryOptions]}
+          value={[selectedCategory]}
+          onChange={(v) => setSelectedCategory(v[0])}
+          style={{ marginBottom: '16px' }}
+        />
       </div>
 
-      {lastUpdated && (
-        <p style={{ marginTop: '1rem', textAlign: 'right', fontStyle: 'italic' }}>
-          Dernière mise à jour : {lastUpdated.toLocaleString()}
-        </p>
-      )}
+      <div style={{ flex: 1, overflow: 'auto', background: '#f7f7f7' }}>
+        <PullToRefresh onRefresh={async () => {
+          setRefreshing(true);
+          const snapshot = await getDocs(query(collection(db, 'items')));
+          const data: Item[] = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...(doc.data() as Omit<Item, 'id'>)
+          }));
+          setItems(data);
+          setRefreshing(false);
+        }} refreshing={refreshing}>
+          <List header={<div style={{ fontSize: '20px', fontWeight: 'bold', color: "black" }}>📋 Aliments</div>}>
+            {filteredItems.map(item => (
+              <SwipeAction
+                key={item.id}
+                rightActions={[
+                  {
+                    key: 'delete',
+                    text: 'Supprimer',
+                    color: 'danger',
+                    onClick: () => handleDelete(item.id),
+                  }
+                ]}
+              >
+                <List.Item
+                  description={<div style={{ fontSize: '16px', color: '#000' }}>{item.category}</div>}
+                  extra={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Button style={{color: 'red', fontSize: "25px"}}  size="large" onClick={() => handleQuantityChange(item.id, -1)}>-</Button>
+                      <div style={{ fontSize: '20px', color:'#000' }}>{item.quantity}</div>
+                      <Button style={{color: 'green', fontSize: "25px"}}  size="large" onClick={() => handleQuantityChange(item.id, 1)}>+</Button>
+                    </div>
+                  }
+                  style={{ fontSize: '18px', padding: '20px 16px' }}
+                >
+                  {item.name}
+                </List.Item>
+              </SwipeAction>
+            ))}
+          </List>
+        </PullToRefresh>
+      </div>
 
-      <table style={{ marginBottom: "30px" }}>
-        <thead>
-          <tr>
-            <th>Nom</th>
-            <th>Quantité</th>
-            <th>Catégorie</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedItems.map(item => (
-            <tr key={item.id} className={item.quantity === 0 ? 'highlight-zero' : ''}>
-              <td>{item.name} {item.quantity === 0 && <span title="Dans la liste de courses">🛒</span>}</td>
-              <td>
-                <button onClick={() => handleQuantityChange(item.id, item.quantity - 1)} className="quantity-btn-moins">-</button>
-                <span style={{ margin: '0 8px' }}>{item.quantity}</span>
-                <button onClick={() => handleQuantityChange(item.id, item.quantity + 1)} className="quantity-btn-plus">+</button>
-              </td>
-              <td>{item.category}</td>
-              <td>
-                <button onClick={() => handleDelete(item.id)} className="delete">🗑️</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </main>
+      <Popup
+        visible={popupVisible}
+        onMaskClick={() => {
+          setPopupVisible(false);
+          resetForm();
+        }}
+        bodyStyle={{ borderTopLeftRadius: 8, borderTopRightRadius: 8, padding: 24 }}
+      >
+        <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
+          Étape {step} / 3
+        </div>
+
+        {step === 1 && (
+          <>
+            <div style={{ fontSize: '20px', marginBottom: '16px' }}>Choisir une catégorie</div>
+            <Selector
+              options={categoryOptions}
+              value={[selectedCategory]}
+              onChange={(v) => {
+                setSelectedCategory(v[0]);
+                setSelectedItemId('');
+                setStep(2);
+              }}
+              style={{ marginTop: 16 }}
+            />
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div style={{ fontSize: '20px', marginBottom: '16px' }}>Choisir un aliment</div>
+            <Selector
+              options={filteredAlimentsOptions}
+              value={selectedItemId ? [selectedItemId] : []}
+              onChange={(v) => setSelectedItemId(v[0])}
+              style={{ marginTop: 16 }}
+            />
+            <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
+              <Button block size="large" onClick={() => setStep(1)}>
+                Retour
+              </Button>
+              <Button block color="primary" size="large" disabled={!selectedItemId} onClick={() => setStep(3)}>
+                Continuer
+              </Button>
+            </div>
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <div style={{ fontSize: '20px', marginBottom: '16px' }}>Choisir la quantité</div>
+            <div style={{ marginTop: 16 }}>
+              <Stepper
+                min={1}
+                max={99}
+                value={selectedQuantity}
+                onChange={val => setSelectedQuantity(val)}
+                style={{ '--input-font-size': '20px' }}
+              />
+            </div>
+            <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
+              <Button block size="large" onClick={() => setStep(2)}>
+                Retour
+              </Button>
+              <Button block color="primary" size="large" onClick={handleAddItem}>
+                Ajouter
+              </Button>
+            </div>
+          </>
+        )}
+      </Popup>
+    </div>
   );
 }
